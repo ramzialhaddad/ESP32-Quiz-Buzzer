@@ -1,0 +1,4 @@
+# Buzzer project
+
+## General Idea:
+A set of buzzers able to be set to host or buzzer mode via a physical switch. Buzzers automatically pair to the host's buzzer upon boot using ESPNow. When the host wants to accept input from buzzers the host will press their own buzzer and the other buzzers will light up indicating to the players that their buzzer is active. The player who's the fastest will have their buzzer remain lit up and flashing, indicating they are the winner. The host then presses their button again to reset all buzzers and prepare for the next cycle. The host optionally may connect their buzzer via USB (WebSerial) to their computer to have a visual interface of the running system, this can be projected onto a large screen for audience members and players.

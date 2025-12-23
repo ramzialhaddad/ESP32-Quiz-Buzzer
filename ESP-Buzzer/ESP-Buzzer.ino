@@ -73,9 +73,9 @@ void OnHostDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int le
 	uint8_t type = incomingData[0]; // first byte of the message is the type of the message
 	switch(type){
 		case DATA:
+			// TODO: Fillout rest of case
 			if(hostStatus == PAIRING || hostStatus == STANDBY || hostStatus == WINNER_SELECTION_FLASHING)
 				return;
-
 			break;
 		case PAIRING:
 			if(hostStatus != PAIRING)
@@ -90,6 +90,16 @@ void OnHostDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int le
 			clientMacAddress[4] = pairingData.macAddr[4];
 			clientMacAddress[5] = pairingData.macAddr[5];
 
+			if(pairingData.id > 0){
+				if(pairingData.msgType == PAIRING){
+					pairingData.id = 0;
+					esp_wifi_get_mac(WIFI_IF_STA, pairingData.macAddr);
+					pairingData.channel = chan;
+					esp_err_t result = esp_now_send(clientMacAddress, (uint8_t *)&pairingData, sizeof(pairingData));
+					addPeer(clientMacAddress);
+					Serial.println("Added peer!");
+				}
+			}
 			break;
 	}
 }
@@ -136,6 +146,11 @@ void OnBuzzerDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int 
 		case DATA:
 	  		break;
 		case PAIRING:
+			memcpy(&pairingData, incomingData, sizeof(pairingData));
+			if(pairingData.id == 0){
+				addPeer(pairingData.macAddr, pairingData.channel);
+				pairingStatus = PAIR_PAIRED;
+			}
 	  		break;
 	}
 }
@@ -147,6 +162,42 @@ void initBuzzerESP_NOW(){
 
 	esp_now_register_send_cb(esp_now_send_cb_t(OnBuzzerDataSent));
 	esp_now_register_send_cb(esp_now_send_cb_t(OnBuzzerDataRecv));
+}
+
+PairingStatus autoPairing(){
+	switch(pairingStatus){
+		case NOT_PAIRED:
+		case PAIR_REQUEST:
+			ESP_ERROR_CHECK(esp_wifi_set_set_channel(channel, WIFI_SECOND_CHAN_NONE));
+			if(esp_now_init != ESP_OK){
+				return;
+			}
+			pairingData.msgType = PAIRING;
+			pairingData.id = BOARD_ID;
+			pairingData.channel = channel;
+			pairingData.macAddr[0] = clientMacAddress[0];
+		    pairingData.macAddr[1] = clientMacAddress[1];
+		    pairingData.macAddr[2] = clientMacAddress[2];
+		    pairingData.macAddr[3] = clientMacAddress[3];
+		    pairingData.macAddr[4] = clientMacAddress[4];
+		    pairingData.macAddr[5] = clientMacAddress[5];
+
+		    addPeer(serverAddress, channel);
+		    esp_now_send(serverAddress, (uint8_t *)&pairingData, sizeof(pairingData));
+		    pairingStatus = PAIR_REQUESTED;
+			break;
+		case PAIR_REQUESTED:
+			channel++;
+			if(channel > 11) // 11 for NA, 13 for EU (according to https://randomnerdtutorials.com/esp-now-auto-pairing-esp32-esp8266/)
+				channel = 1;
+			pairingStatus = PAIR_REQUEST;
+			break;
+		case PAIR_PAIRED:
+			break;
+		case PAIR_DENIED:
+			break;		
+	}
+	return pairingStatus;
 }
 
 // -------- END BUZZER SPECIFIC -------- \\
@@ -169,9 +220,16 @@ void setup() {
 	}else{
 		initBuzzerESP_NOW();
 	}
+
+	ulong previous = 0;
+	while(pairingStatus != PAIR_PAIRED){
+		if(millis() - previous > 1000){
+			previous = 1000;
+			autoPairing();
+		}
+	}
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-
+	// put your main code here, to run repeatedly:
 }

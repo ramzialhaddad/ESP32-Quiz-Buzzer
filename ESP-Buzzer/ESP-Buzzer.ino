@@ -14,7 +14,9 @@ enum ActionType
 {
 	STANDBY,
 	FLASH,
-	READY_TO_RECEIVE
+	READY_TO_RECEIVE,
+	YOU_ARE_WINNER,
+	CAN_I_BE_WINNER
 };
 
 // Structs

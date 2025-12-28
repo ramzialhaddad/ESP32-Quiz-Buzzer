@@ -275,15 +275,15 @@ void setup() {
 	isHost = digitalRead(IS_HOST_PIN);
 
 	if(isHost){
-		initHostESP_NOW();
+		initHost();
 	}else{
-		initBuzzerESP_NOW();
+		initBuzzer();
 	}
 
 	ulong previous = 0;
 	while(pairingStatus != PAIR_PAIRED){
 		if(millis() - previous > 1000){
-			previous = 1000;
+			previous = millis();
 			autoPairing();
 		}
 	}

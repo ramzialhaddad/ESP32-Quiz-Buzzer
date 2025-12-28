@@ -106,13 +106,16 @@ void OnHostDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int le
 	}
 }
 
-void initHostESP_NOW(){
+void initHost(){
 	if(esp_now_init() != ESP_OK){
 		return;
 	}
 
 	esp_now_register_send_cb(esp_now_send_cb_t(OnHostDataSent));
 	esp_now_register_send_cb(esp_now_send_cb_t(OnHostDataRecv));
+
+	attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), HostButtonHandler, FALLING);
+
 }
 
 // -------- END HOST SPECIFIC -------- \\
@@ -157,13 +160,16 @@ void OnBuzzerDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int 
 	}
 }
 
-void initBuzzerESP_NOW(){
+void initBuzzer(){
 	if(esp_now_init() != ESP_OK){
 		return;
 	}
 
 	esp_now_register_send_cb(esp_now_send_cb_t(OnBuzzerDataSent));
 	esp_now_register_send_cb(esp_now_send_cb_t(OnBuzzerDataRecv));
+
+	attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), BuzzerButtonHandler, FALLING);
+
 }
 
 PairingStatus autoPairing(){

@@ -167,14 +167,47 @@ void OnBuzzerDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int 
 	uint8_t type = incomingData[0]; // first byte of the message is the type of the message
 	switch(type){
 		case DATA:
-	  		break;
+			if(buzzerStatus == LOOKING_TO_PAIR) // We aren't paired with the host, anything here isn't for us
+				return;
+
+			memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
+			bool isUs = true;
+			for (int x = 0; x < 6; x++)
+			{
+				if (inData.macAddr[x] != clientMacAddress[x]){
+					isUs = false;
+				}
+			}
+
+			switch(incomingReadings.actionType){
+				case YOU_ARE_WINNER:
+					if(isUs)
+						buzzerStatus = SELECTED_AS_WINNER;
+					else
+						buzzerStatus = STANDBY;
+					break;
+				case STANDBY:
+					if(isUs)
+						buzzerStatus = STANDBY;
+					break;
+				case READY_TO_RECEIVE:
+					if(isUs)
+						buzzerStatus = READY_TO_SEND;
+					break;
+				case FLASH:
+					if(isUs)
+						buzzerStatus = STANDBY; // TODO: Flashing logic
+					break;
+			}
+
+			break;
 		case PAIRING:
 			memcpy(&pairingData, incomingData, sizeof(pairingData));
 			if(pairingData.id == 0){
 				addPeer(pairingData.macAddr, pairingData.channel);
 				pairingStatus = PAIR_PAIRED;
 			}
-	  		break;
+			break;
 	}
 }
 

@@ -285,6 +285,21 @@ void setup() {
 	}
 }
 
+
+void BuzzerButtonHandler(){
+	// TODO fill this out
+	if(buzzerStatus != READY_TO_SEND)
+		return;
+
+	buzzerStatus = STANDBY;
+
+	outgoingSetpoints.id = 1;
+	outgoingSetpoints.actionType = CAN_I_BE_WINNER;
+	esp_wifi_get_mac(WIFI_IF_STA, pairingData.macAddr);
+
+	esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
+}
+
 void loop() {
 	// put your main code here, to run repeatedly:
 }

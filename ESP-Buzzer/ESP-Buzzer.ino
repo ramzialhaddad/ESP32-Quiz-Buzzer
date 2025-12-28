@@ -285,6 +285,9 @@ void setup() {
 	}
 }
 
+void HostButtonHandler(){
+	// TODO fill this out
+}
 
 void BuzzerButtonHandler(){
 	// TODO fill this out

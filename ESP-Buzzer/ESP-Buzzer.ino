@@ -234,16 +234,12 @@ PairingStatus autoPairing(){
 			pairingData.msgType = PAIRING;
 			pairingData.id = BOARD_ID;
 			pairingData.channel = channel;
-			pairingData.macAddr[0] = clientMacAddress[0];
-		    pairingData.macAddr[1] = clientMacAddress[1];
-		    pairingData.macAddr[2] = clientMacAddress[2];
-		    pairingData.macAddr[3] = clientMacAddress[3];
-		    pairingData.macAddr[4] = clientMacAddress[4];
-		    pairingData.macAddr[5] = clientMacAddress[5];
 
-		    addPeer(serverAddress, channel);
-		    esp_now_send(serverAddress, (uint8_t *)&pairingData, sizeof(pairingData));
-		    pairingStatus = PAIR_REQUESTED;
+			esp_wifi_get_mac(WIFI_IF_STA, pairingData.macAddr);
+
+			addPeer(serverAddress, channel);
+			esp_now_send(serverAddress, (uint8_t *)&pairingData, sizeof(pairingData));
+			pairingStatus = PAIR_REQUESTED;
 			break;
 		case PAIR_REQUESTED:
 			channel++;

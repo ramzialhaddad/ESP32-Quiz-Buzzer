@@ -75,9 +75,27 @@ void OnHostDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int le
 	uint8_t type = incomingData[0]; // first byte of the message is the type of the message
 	switch(type){
 		case DATA:
-			// TODO: Fillout rest of case
 			if(hostStatus == PAIRING || hostStatus == STANDBY || hostStatus == WINNER_SELECTION_FLASHING)
 				return;
+			if(hostStatus == RECEIVING_BUZZER_RESPONSES){
+				memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
+
+				if(incomingReadings.id == 0)
+					return;
+
+				if(!FoundWinner){
+					FoundWinner == true;
+					memcpy(winnerMacAddress, incomingReadings.macAddr, sizeof(winnerMacAddress));
+
+					outgoingSetpoints.msgType = DATA;
+					outgoingSetpoints.id = 0;
+					outgoingSetpoints.actionType = YOU_ARE_WINNER;
+
+					memcpy(outgoingSetpoints.macAddr, winnerMacAddress, sizeof(winnerMacAddress));
+
+					esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
+				}
+			}
 			break;
 		case PAIRING:
 			if(hostStatus != PAIRING)

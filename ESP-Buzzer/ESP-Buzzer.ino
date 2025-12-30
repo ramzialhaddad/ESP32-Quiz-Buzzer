@@ -95,6 +95,7 @@ void OnHostDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int le
 					memcpy(outgoingSetpoints.macAddr, winnerMacAddress, sizeof(winnerMacAddress));
 
 					esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
+					hostStatus = WINNER_SELECTION_FLASHING;
 				}
 			}
 			break;

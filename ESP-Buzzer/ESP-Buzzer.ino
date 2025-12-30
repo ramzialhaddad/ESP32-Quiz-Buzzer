@@ -189,12 +189,10 @@ void OnBuzzerDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int 
 						buzzerStatus = STANDBY;
 					break;
 				case STANDBY:
-					if(isUs)
-						buzzerStatus = STANDBY;
+					buzzerStatus = STANDBY;
 					break;
 				case READY_TO_RECEIVE:
-					if(isUs)
-						buzzerStatus = READY_TO_SEND;
+					buzzerStatus = READY_TO_SEND;
 					break;
 				case FLASH:
 					if(isUs)

@@ -43,9 +43,9 @@ esp_now_peer_info_t peer;
 int chan;
 
 // Structs
-struct_message incomingReadings;
-struct_message outgoingSetpoints;
-struct_pairing pairingData;
+volatile struct_message incomingReadings;
+volatile struct_message outgoingSetpoints;
+volatile struct_pairing pairingData;
 
 bool isHost;
 
@@ -65,7 +65,8 @@ enum HostStatus
 	RECEIVING_BUZZER_RESPONSES,
 	WINNER_SELECTION_FLASHING,
 };
-HostStatus hostStatus = PAIRING;
+volatile HostStatus hostStatus = PAIRING;
+volatile bool FoundWinner = false;
 
 void OnHostDataSent(const wifi_tx_info_t *mac_addr, esp_now_send_status_t status){
 	Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Last packet delivered successfully" : "Last packet delivery failed!");

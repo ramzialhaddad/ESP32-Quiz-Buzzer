@@ -286,11 +286,38 @@ void setup() {
 }
 
 void HostButtonHandler(){
-	// TODO fill this out
+	switch(hostStatus){
+		case PAIRING:
+			hostStatus = STANDBY;
+
+			outgoingSetpoints.id = 1;
+			outgoingSetpoints.actionType = READY_TO_RECEIVE;
+			esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
+			break;
+		case STANDBY:
+			hostStatus = RECEIVING_BUZZER_RESPONSES;
+
+			outgoingSetpoints.id = 1;
+			outgoingSetpoints.actionType = READY_TO_RECEIVE;
+			esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
+
+			break;
+		case RECEIVING_BUZZER_RESPONSES:
+			// Cancel receiving requests??
+			break;
+		case WINNER_SELECTION_FLASHING:
+			FoundWinner = false;
+			hostStatus = STANDBY;
+
+			outgoingSetpoints.id = 1;
+			outgoingSetpoints.actionType = STANDBY;
+			esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
+			break;
+
+	}
 }
 
 void BuzzerButtonHandler(){
-	// TODO fill this out
 	if(buzzerStatus != READY_TO_SEND)
 		return;
 

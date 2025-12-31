@@ -25,7 +25,7 @@ typedef struct struct_message
 	uint8_t msgType; // MessageType enum
 	uint8_t id;
 	uint8_t macAddr[6];
-	uint8_t actionType // ActionType enum
+	uint8_t actionType; // ActionType enum
 } struct_message;
 
 typedef struct struct_pairing
@@ -37,35 +37,38 @@ typedef struct struct_pairing
 } struct_pairing;
 
 // MEMORY ALLOCATIONS \\
+
 MessageType messageType;
 uint8_t clientMacAddress[6];
 esp_now_peer_info_t peer;
 int chan;
 
 // Structs
-volatile struct_message incomingReadings;
-volatile struct_message outgoingSetpoints;
-volatile struct_pairing pairingData;
+struct_message incomingReadings;
+struct_message outgoingSetpoints;
+struct_pairing pairingData;
 
 bool isHost;
 
 // ATTACHED HARDWARE STUFF \\
-#define LED_PIN 1
-#define IS_HOST_PIN 2
+
+#define LED_PIN 2
+#define IS_HOST_PIN 25
 //#define IS_BUZZER_PIN 3
-#define BUTTON_PIN 4
+#define BUTTON_PIN 26
 
 // ---------- HOST SPECIFIC ---------- \\
+
 uint8_t PairedMacAddresses[20][6];
 
 enum HostStatus
 {
-	PAIRING,
-	STANDBY,
+	HOST_PAIRING,
+	HOST_STANDBY,
 	RECEIVING_BUZZER_RESPONSES,
 	WINNER_SELECTION_FLASHING,
 };
-volatile HostStatus hostStatus = PAIRING;
+HostStatus hostStatus = HOST_PAIRING;
 volatile bool FoundWinner = false;
 
 void OnHostDataSent(const wifi_tx_info_t *mac_addr, esp_now_send_status_t status){
@@ -74,9 +77,11 @@ void OnHostDataSent(const wifi_tx_info_t *mac_addr, esp_now_send_status_t status
 
 void OnHostDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len){
 	uint8_t type = incomingData[0]; // first byte of the message is the type of the message
+	Serial.println("Received something!");
 	switch(type){
 		case DATA:
-			if(hostStatus == PAIRING || hostStatus == STANDBY || hostStatus == WINNER_SELECTION_FLASHING)
+			Serial.println("It was data!");
+			if(hostStatus == HOST_PAIRING || hostStatus == HOST_STANDBY || hostStatus == WINNER_SELECTION_FLASHING)
 				return;
 			if(hostStatus == RECEIVING_BUZZER_RESPONSES){
 				memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
@@ -85,14 +90,14 @@ void OnHostDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int le
 					return;
 
 				if(!FoundWinner){
-					FoundWinner == true;
-					memcpy(winnerMacAddress, incomingReadings.macAddr, sizeof(winnerMacAddress));
+					FoundWinner = true;
+					memcpy(clientMacAddress, incomingReadings.macAddr, sizeof(clientMacAddress));
 
 					outgoingSetpoints.msgType = DATA;
 					outgoingSetpoints.id = 0;
 					outgoingSetpoints.actionType = YOU_ARE_WINNER;
 
-					memcpy(outgoingSetpoints.macAddr, winnerMacAddress, sizeof(winnerMacAddress));
+					memcpy(outgoingSetpoints.macAddr, clientMacAddress, sizeof(clientMacAddress));
 
 					esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
 					hostStatus = WINNER_SELECTION_FLASHING;
@@ -100,7 +105,8 @@ void OnHostDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int le
 			}
 			break;
 		case PAIRING:
-			if(hostStatus != PAIRING)
+			Serial.println("It was PAIRING");
+			if(hostStatus != HOST_PAIRING)
 				return;
 
 			memcpy(&pairingData, incomingData, sizeof(pairingData));
@@ -118,11 +124,36 @@ void OnHostDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int le
 					esp_wifi_get_mac(WIFI_IF_STA, pairingData.macAddr);
 					pairingData.channel = chan;
 					esp_err_t result = esp_now_send(clientMacAddress, (uint8_t *)&pairingData, sizeof(pairingData));
-					addPeer(clientMacAddress);
+					HostAddPeer(clientMacAddress);
 					Serial.println("Added peer!");
 				}
 			}
 			break;
+	}
+}
+
+bool HostAddPeer(const uint8_t *peer_addr)
+{ // add pairing
+	memset(&peer, 0, sizeof(peer));
+	memcpy(peer.peer_addr, peer_addr, 6);
+
+	peer.channel = chan;
+	peer.encrypt = 0;
+	bool exists = esp_now_is_peer_exist(peer.peer_addr);
+	if (exists){
+		Serial.println("Already Paired");
+		return true;
+	}
+	else{
+		esp_err_t addStatus = esp_now_add_peer(&peer);
+		if (addStatus == ESP_OK){
+	  		Serial.println("Pair success");
+	  		return true;
+		}
+		else {
+	  		Serial.println("Pair failed");
+	  		return false;
+		}
 	}
 }
 
@@ -132,7 +163,7 @@ void initHost(){
 	}
 
 	esp_now_register_send_cb(esp_now_send_cb_t(OnHostDataSent));
-	esp_now_register_send_cb(esp_now_send_cb_t(OnHostDataRecv));
+	esp_now_register_recv_cb(esp_now_recv_cb_t(OnHostDataRecv));
 
 	attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), HostButtonHandler, FALLING);
 
@@ -142,10 +173,11 @@ void initHost(){
 
 
 // ---------- BUZZER SPECIFIC ---------- \\
+
 enum BuzzerStatus
 {
 	LOOKING_TO_PAIR,
-	STANDBY,
+	BUZZER_STANDBY,
 	READY_TO_SEND,
 	SELECTED_AS_WINNER,
 };
@@ -167,16 +199,18 @@ void OnBuzzerDataSent(const wifi_tx_info_t *mac_addr, esp_now_send_status_t stat
 
 void OnBuzzerDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len){
 	uint8_t type = incomingData[0]; // first byte of the message is the type of the message
+	bool isUs = true;
+	Serial.println("Received something");
 	switch(type){
 		case DATA:
+			Serial.println("It was data!");
 			if(buzzerStatus == LOOKING_TO_PAIR) // We aren't paired with the host, anything here isn't for us
 				return;
 
 			memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
-			bool isUs = true;
 			for (int x = 0; x < 6; x++)
 			{
-				if (inData.macAddr[x] != clientMacAddress[x]){
+				if (incomingReadings.macAddr[x] != clientMacAddress[x]){
 					isUs = false;
 				}
 			}
@@ -186,26 +220,28 @@ void OnBuzzerDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int 
 					if(isUs)
 						buzzerStatus = SELECTED_AS_WINNER;
 					else
-						buzzerStatus = STANDBY;
+						buzzerStatus = BUZZER_STANDBY;
 					break;
 				case STANDBY:
-					buzzerStatus = STANDBY;
+					buzzerStatus = BUZZER_STANDBY;
 					break;
 				case READY_TO_RECEIVE:
 					buzzerStatus = READY_TO_SEND;
 					break;
 				case FLASH:
 					if(isUs)
-						buzzerStatus = STANDBY; // TODO: Flashing logic
+						buzzerStatus = BUZZER_STANDBY; // TODO: Flashing logic
 					break;
 			}
 
 			break;
 		case PAIRING:
+			Serial.println("It was PAIRING!");
 			memcpy(&pairingData, incomingData, sizeof(pairingData));
 			if(pairingData.id == 0){
-				addPeer(pairingData.macAddr, pairingData.channel);
+				BuzzerAddPeer(pairingData.macAddr, pairingData.channel);
 				pairingStatus = PAIR_PAIRED;
+				Serial.println("PAIRED!!! LETS GOOOOO");
 			}
 			break;
 	}
@@ -213,38 +249,43 @@ void OnBuzzerDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int 
 
 void initBuzzer(){
 	if(esp_now_init() != ESP_OK){
+		Serial.println("Error!");
 		return;
 	}
 
 	esp_now_register_send_cb(esp_now_send_cb_t(OnBuzzerDataSent));
-	esp_now_register_send_cb(esp_now_send_cb_t(OnBuzzerDataRecv));
+	esp_now_register_recv_cb(esp_now_recv_cb_t(OnBuzzerDataRecv));
 
 	attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), BuzzerButtonHandler, FALLING);
 
 }
 
-PairingStatus autoPairing(){
+void autoPairing(){
+	Serial.println("Running autoPairing");
+	Serial.print("Pairing Status:");
+	Serial.println(pairingStatus);
+	uint8_t serverAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 	switch(pairingStatus){
 		case NOT_PAIRED:
 		case PAIR_REQUEST:
-			ESP_ERROR_CHECK(esp_wifi_set_set_channel(channel, WIFI_SECOND_CHAN_NONE));
-			if(esp_now_init != ESP_OK){
-				return;
-			}
+			ESP_ERROR_CHECK(esp_wifi_set_channel(chan, WIFI_SECOND_CHAN_NONE));
+			
 			pairingData.msgType = PAIRING;
-			pairingData.id = BOARD_ID;
-			pairingData.channel = channel;
+			pairingData.id = 1;
+			pairingData.channel = chan;
 
-			esp_wifi_get_mac(WIFI_IF_STA, pairingData.macAddr);
+			if(esp_wifi_get_mac(WIFI_IF_STA, pairingData.macAddr) != ESP_OK)
+				Serial.println("BAD HAPPENED!");
 
-			addPeer(serverAddress, channel);
-			esp_now_send(serverAddress, (uint8_t *)&pairingData, sizeof(pairingData));
+			BuzzerAddPeer(serverAddress, chan);
+			if(esp_now_send(serverAddress, (uint8_t *)&pairingData, sizeof(pairingData)) != ESP_OK)
+				Serial.println("Error occured!");
 			pairingStatus = PAIR_REQUESTED;
 			break;
 		case PAIR_REQUESTED:
-			channel++;
-			if(channel > 11) // 11 for NA, 13 for EU (according to https://randomnerdtutorials.com/esp-now-auto-pairing-esp32-esp8266/)
-				channel = 1;
+			chan++;
+			if(chan > 11) // 11 for NA, 13 for EU (according to https://randomnerdtutorials.com/esp-now-auto-pairing-esp32-esp8266/)
+				chan = 1;
 			pairingStatus = PAIR_REQUEST;
 			break;
 		case PAIR_PAIRED:
@@ -252,7 +293,19 @@ PairingStatus autoPairing(){
 		case PAIR_DENIED:
 			break;		
 	}
-	return pairingStatus;
+}
+
+void BuzzerAddPeer(const uint8_t *mac_addr, uint8_t chan)
+{
+	ESP_ERROR_CHECK(esp_wifi_set_channel(chan, WIFI_SECOND_CHAN_NONE));
+	esp_now_del_peer(mac_addr);
+	memset(&peer, 0, sizeof(esp_now_peer_info_t));
+	peer.channel = chan;
+	peer.encrypt = false;
+	memcpy(peer.peer_addr, mac_addr, sizeof(uint8_t[6]));
+	if (esp_now_add_peer(&peer) != ESP_OK){
+		return;
+	}
 }
 
 // -------- END BUZZER SPECIFIC -------- \\
@@ -264,40 +317,46 @@ void setup() {
 	WiFi.mode(WIFI_STA);
 	chan = WiFi.channel();
 
+	while (!WiFi.STA.started()) {
+		delay(100);
+	}
+
 	pinMode(BUTTON_PIN, INPUT_PULLUP);
 	pinMode(LED_PIN, OUTPUT);
 
 	pinMode(IS_HOST_PIN, INPUT_PULLUP);
-	isHost = digitalRead(IS_HOST_PIN);
+	isHost = !digitalRead(IS_HOST_PIN);
 
 	if(isHost){
 		initHost();
+		Serial.println("I am host!");
 	}else{
 		initBuzzer();
-	}
-
-	ulong previous = 0;
-	while(pairingStatus != PAIR_PAIRED){
-		if(millis() - previous > 1000){
-			previous = millis();
-			autoPairing();
+		unsigned long previous = 0;
+		while(pairingStatus != PAIR_PAIRED){
+			if(millis() - previous > 1000){
+				previous = millis();
+				autoPairing();
+			}
 		}
+		digitalWrite(LED_PIN, HIGH);
+		Serial.println("I am buzzer!!");
 	}
 }
 
 void HostButtonHandler(){
 	switch(hostStatus){
-		case PAIRING:
-			hostStatus = STANDBY;
+		case HOST_PAIRING:
+			hostStatus = HOST_STANDBY;
 
-			outgoingSetpoints.id = 1;
+			outgoingSetpoints.id = 0;
 			outgoingSetpoints.actionType = READY_TO_RECEIVE;
 			esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
 			break;
-		case STANDBY:
+		case HOST_STANDBY:
 			hostStatus = RECEIVING_BUZZER_RESPONSES;
 
-			outgoingSetpoints.id = 1;
+			outgoingSetpoints.id = 0;
 			outgoingSetpoints.actionType = READY_TO_RECEIVE;
 			esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
 
@@ -307,9 +366,9 @@ void HostButtonHandler(){
 			break;
 		case WINNER_SELECTION_FLASHING:
 			FoundWinner = false;
-			hostStatus = STANDBY;
+			hostStatus = HOST_STANDBY;
 
-			outgoingSetpoints.id = 1;
+			outgoingSetpoints.id = 0;
 			outgoingSetpoints.actionType = STANDBY;
 			esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
 			break;
@@ -321,7 +380,7 @@ void BuzzerButtonHandler(){
 	if(buzzerStatus != READY_TO_SEND)
 		return;
 
-	buzzerStatus = STANDBY;
+	buzzerStatus = BUZZER_STANDBY;
 
 	outgoingSetpoints.id = 1;
 	outgoingSetpoints.actionType = CAN_I_BE_WINNER;
@@ -331,5 +390,22 @@ void BuzzerButtonHandler(){
 }
 
 void loop() {
-	// put your main code here, to run repeatedly:
+	if(isHost)
+		ledFlash();
+}
+
+
+unsigned long appointmentTime = 0;
+bool ledOn = false;
+
+void ledFlash(){
+	if(millis() < appointmentTime)
+		return;
+
+	switch(hostStatus){
+		case HOST_PAIRING:
+			appointmentTime = millis() + 500;
+			digitalWrite(LED_PIN, ledOn = !ledOn);
+			break;
+	}
 }

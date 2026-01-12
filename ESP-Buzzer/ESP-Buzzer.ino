@@ -234,6 +234,7 @@ void OnBuzzerDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int 
 				return;
 
 			memcpy(&incomingReadings, incomingData, sizeof(incomingReadings));
+			esp_wifi_get_mac(WIFI_IF_STA, clientMacAddress);
 			for (int x = 0; x < 6; x++)
 			{
 				if (incomingReadings.macAddr[x] != clientMacAddress[x])
@@ -248,12 +249,13 @@ void OnBuzzerDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int 
 					if (isUs)
 					{
 						buzzerStatus = SELECTED_AS_WINNER;
-						appointmentTime = 0;
+						appointmentTime = 0; // Begin the flashing sequence
 						Serial.println("We are the winner!");
 					}
 					else
 					{
 						buzzerStatus = BUZZER_STANDBY;
+						appointmentTime = 0; // Set to 0 so that we can trigger the Stanby code once
 						Serial.println("We are NOT the winner.");
 					}
 					break;
@@ -399,8 +401,15 @@ void setup()
 	}
 }
 
+unsigned long lastButtonPressTime = 0;
+
 void HostButtonHandler()
 {
+	if(millis() - lastButtonPressTime < 100)
+		return;
+
+	lastButtonPressTime = millis();
+
 	switch (hostStatus)
 	{
 		case HOST_PAIRING:
@@ -478,6 +487,7 @@ void sendMessage(){
 		outgoingSetpoints.actionType = volatileOutgoingSetpoints.actionType;
 
 		esp_now_send(NULL, (uint8_t *)&outgoingSetpoints, sizeof(outgoingSetpoints));
+		Serial.println("Sent message!");
 	}
 }
 
